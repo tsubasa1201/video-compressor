@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>動画を小さくするやつ</title>
+<title>動画から音声を抜き出す（NotebookLM用）</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap');
   :root { --bg:#08090d; --panel:#101218; --panel-2:#161922; --line:#232733; --text:#eef1f6; --text-dim:#868d9c; --accent:#ffd23f; --accent-2:#ff7849; --green:#2ee6a0; --mono:'Space Mono',monospace; --sans:'Zen Kaku Gothic New',sans-serif; }
@@ -88,8 +88,8 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>動画を<span class="hl">ぎゅっと</span>小さく</h1>
-    <p class="sub">複数まとめて、できるだけ小さいファイルにします。</p>
+    <h1>動画から<span class="hl">音声</span>を抜き出す</h1>
+    <p class="sub">NotebookLM用に、音声だけを軽いMP3で取り出します。複数まとめてOK。</p>
     <div class="privacy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>ファイルはどこにもアップロードされません</div>
   </header>
   <div class="drop" id="drop">
@@ -104,36 +104,34 @@
     <div style="text-align:right; margin-bottom:18px;"><button class="clear-btn" id="clearBtn">すべてクリア</button></div>
     <button class="adv-toggle" id="advToggle">こまかい設定（全ファイル共通）<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></button>
     <div class="adv" id="adv">
-      <div class="set-label">圧縮の強さ</div>
+      <div class="set-label">音声の品質</div>
       <div class="seg" id="quality">
-        <div class="seg-btn" data-crf="26"><span class="t">そこそこ</span><span class="d">画質キープ</span></div>
-        <div class="seg-btn active" data-crf="30"><span class="t">小さめ</span><span class="d">おすすめ</span></div>
-        <div class="seg-btn" data-crf="34"><span class="t">最小</span><span class="d">とにかく軽く</span></div>
+        <div class="seg-btn active" data-rate="64"><span class="t">NotebookLM用</span><span class="d">いちばん軽い</span></div>
+        <div class="seg-btn" data-rate="96"><span class="t">標準</span><span class="d">バランス</span></div>
+        <div class="seg-btn" data-rate="128"><span class="t">高音質</span><span class="d">クリア</span></div>
       </div>
-      <div class="set-label">解像度</div>
-      <div class="seg four" id="resolution">
-        <div class="seg-btn" data-scale="0"><span class="t">元のまま</span></div>
-        <div class="seg-btn" data-scale="1080"><span class="t">1080p</span></div>
-        <div class="seg-btn active" data-scale="720"><span class="t">720p</span></div>
-        <div class="seg-btn" data-scale="480"><span class="t">480p</span></div>
+      <div class="set-label">チャンネル</div>
+      <div class="seg" id="channel">
+        <div class="seg-btn active" data-ch="1"><span class="t">モノラル</span><span class="d">軽い・推奨</span></div>
+        <div class="seg-btn" data-ch="2"><span class="t">ステレオ</span><span class="d">そのまま</span></div>
       </div>
     </div>
-    <button class="go" id="goBtn">すべて小さくする</button>
+    <button class="go" id="goBtn">すべて音声を抜き出す</button>
     <div class="loading-engine hidden" id="engineLoad"><span class="qspin"></span><span id="engineLoadText">処理エンジンを準備中…（初回のみ少し時間がかかります）</span></div>
   </div>
   <div class="card hidden" id="resultCard">
-    <div class="summary"><div class="pct" id="sumPct">—</div><div class="lbl" id="sumLbl">小さくなりました</div></div>
+    <div class="summary"><div class="pct" id="sumPct">—</div><div class="lbl" id="sumLbl">音声を抜き出しました</div></div>
     <button class="dl-all" id="dlAllBtn"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="dlAllLabel">すべてダウンロード</span></button>
     <button class="again" id="againBtn">新しく始める</button>
   </div>
   <div class="err hidden" id="errBox"></div>
-  <p class="footnote">処理はすべてあなたのブラウザ内で完結します。動画は外部に一切送信されません。</p>
+  <p class="footnote">処理はすべてあなたのブラウザ内で完結します。動画は外部に一切送信されません。<br>抜き出したMP3をNotebookLMにアップロードしてお使いください。</p>
 </div>
 <script>
 const $ = id => document.getElementById(id);
 const drop=$('drop'), fileInput=$('file'), mainCard=$('mainCard'), resultCard=$('resultCard'), errBox=$('errBox'), queueEl=$('queue'), goBtn=$('goBtn');
 let ffmpeg=null, ffmpegLoaded=false, isRunning=false;
-let settings={ crf:30, scale:720 };
+let settings={ rate:64, ch:1 };
 let items=[]; let uid=0;
 drop.addEventListener('click', ()=> { if(!isRunning) fileInput.click(); });
 drop.addEventListener('dragover', e=>{ e.preventDefault(); if(!isRunning) drop.classList.add('over'); });
@@ -143,8 +141,8 @@ fileInput.addEventListener('change', e=>{ addFiles(e.target.files); fileInput.va
 $('clearBtn').addEventListener('click', ()=> { if(!isRunning) clearAll(); });
 $('againBtn').addEventListener('click', clearAll);
 $('advToggle').addEventListener('click', ()=>{ $('adv').classList.toggle('show'); $('advToggle').classList.toggle('open'); });
-$('quality').addEventListener('click', e=>{ const b=e.target.closest('.seg-btn'); if(!b||isRunning)return; $('quality').querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); settings.crf=+b.dataset.crf; });
-$('resolution').addEventListener('click', e=>{ const b=e.target.closest('.seg-btn'); if(!b||isRunning)return; $('resolution').querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); settings.scale=+b.dataset.scale; });
+$('quality').addEventListener('click', e=>{ const b=e.target.closest('.seg-btn'); if(!b||isRunning)return; $('quality').querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); settings.rate=+b.dataset.rate; });
+$('channel').addEventListener('click', e=>{ const b=e.target.closest('.seg-btn'); if(!b||isRunning)return; $('channel').querySelectorAll('.seg-btn').forEach(x=>x.classList.remove('active')); b.classList.add('active'); settings.ch=+b.dataset.ch; });
 function fmtSize(b){ if(b<1024)return b+' B'; if(b<1048576)return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
 function clearAll(){ items.forEach(it=>{ if(it.thumbUrl)URL.revokeObjectURL(it.thumbUrl); if(it.outUrl)URL.revokeObjectURL(it.outUrl); }); items=[]; errBox.classList.add('hidden'); resultCard.classList.add('hidden'); mainCard.classList.add('hidden'); drop.classList.remove('compact'); drop.querySelector('h2').textContent='動画をまとめてドラッグ&ドロップ'; render(); }
 function addFiles(fileList){ const vids=[...fileList].filter(f=>f.type.startsWith('video/')); if(!vids.length){ if(fileList.length) showErr('動画ファイルが見つかりませんでした。'); return; } errBox.classList.add('hidden'); resultCard.classList.add('hidden'); vids.forEach(file=>{ const id=++uid; const it={ id, file, name:file.name, size:file.size, status:'wait', duration:0, width:0, height:0, thumbUrl:URL.createObjectURL(file) }; items.push(it); const v=document.createElement('video'); v.muted=true; v.preload='metadata'; v.src=it.thumbUrl; v.addEventListener('loadedmetadata', ()=>{ it.duration=v.duration; it.width=v.videoWidth; it.height=v.videoHeight; render(); }, { once:true }); }); mainCard.classList.remove('hidden'); drop.classList.add('compact'); drop.querySelector('h2').textContent='さらに追加'; render(); }
@@ -155,7 +153,7 @@ function render(){
     const div=document.createElement('div'); div.className='qitem '+(it.status==='done'?'done':it.status==='processing'?'processing':it.status==='error'?'error':'');
     let s='';
     if(it.status==='wait') s='<span class="qwait"></span> 待機中 · '+fmtSize(it.size);
-    else if(it.status==='processing') s='<span class="qspin"></span> 小さくしています…';
+    else if(it.status==='processing') s='<span class="qspin"></span> 音声を抜き出しています…';
     else if(it.status==='done'){ const r=Math.round((1-it.outSize/it.size)*100); s='<span>'+fmtSize(it.size)+'</span> <span class="arrow">→</span> <span class="ok">'+fmtSize(it.outSize)+' (-'+(r>0?r:0)+'%)</span>'; }
     else if(it.status==='error') s='<span class="err-t">エラー: '+(it.errMsg||'失敗')+'</span>';
     let a='';
@@ -167,7 +165,7 @@ function render(){
   queueEl.querySelectorAll('[data-rm]').forEach(b=> b.addEventListener('click', ()=> removeItem(+b.dataset.rm)));
   const waiting=items.filter(x=>x.status==='wait').length;
   goBtn.disabled = isRunning || waiting===0;
-  goBtn.textContent = isRunning ? '処理中…' : (items.some(x=>x.status==='done') && waiting>0 ? '残り'+waiting+'件を小さくする' : 'すべて小さくする');
+  goBtn.textContent = isRunning ? '処理中…' : (items.some(x=>x.status==='done') && waiting>0 ? '残り'+waiting+'件を抜き出す' : 'すべて音声を抜き出す');
 }
 function showErr(msg){ errBox.textContent=msg; errBox.classList.remove('hidden'); }
 async function loadFFmpeg(){
@@ -218,23 +216,22 @@ goBtn.addEventListener('click', async ()=>{
     it.status='processing'; render();
     try {
       const ext=(it.name.split('.').pop()||'mp4').toLowerCase();
-      const inName='in_'+it.id+'.'+ext, outName='out_'+it.id+'.mp4';
+      const inName='in_'+it.id+'.'+ext, outName='out_'+it.id+'.mp3';
       const buf=new Uint8Array(await it.file.arrayBuffer());
       ffmpeg.FS('writeFile', inName, buf);
-      const args=['-i',inName];
-      if(settings.scale>0 && it.height>settings.scale) args.push('-vf','scale=-2:'+settings.scale);
-      args.push('-c:v','libx264','-crf',String(settings.crf),'-preset','veryfast','-c:a','aac','-b:a','96k','-movflags','+faststart',outName);
+      // 映像を捨てて(-vn)、音声だけMP3で抽出。NotebookLM向けに軽く。
+      const args=['-i',inName,'-vn','-ac',String(settings.ch),'-ar','22050','-c:a','libmp3lame','-b:a',settings.rate+'k',outName];
       await ffmpeg.run(...args);
       const data=ffmpeg.FS('readFile', outName);
-      const blob=new Blob([data.buffer],{type:'video/mp4'});
-      it.outBlob=blob; it.outSize=blob.size; it.outUrl=URL.createObjectURL(blob); it.outName=it.name.replace(/\.[^.]+$/,'')+'_small.mp4'; it.status='done';
+      const blob=new Blob([data.buffer],{type:'audio/mpeg'});
+      it.outBlob=blob; it.outSize=blob.size; it.outUrl=URL.createObjectURL(blob); it.outName=it.name.replace(/\.[^.]+$/,'')+'.mp3'; it.status='done';
       try{ ffmpeg.FS('unlink', inName); ffmpeg.FS('unlink', outName); }catch(e){}
     } catch(err){ console.error(err); it.status='error'; it.errMsg=String(err.message||err).slice(0,40); }
     render();
   }
   isRunning=false; render(); showSummary();
 });
-function showSummary(){ const done=items.filter(x=>x.status==='done'); if(!done.length)return; const before=done.reduce((s,x)=>s+x.size,0), after=done.reduce((s,x)=>s+x.outSize,0); const ratio=Math.round((1-after/before)*100); $('sumPct').textContent=(ratio>0?'-':'±')+(ratio>0?ratio:0)+'%'; $('sumLbl').textContent=done.length+'件完了 · 合計 '+fmtSize(before)+' → '+fmtSize(after)+'（'+fmtSize(before-after)+' 削減）'; $('dlAllLabel').textContent = done.length>1 ? done.length+'件すべてダウンロード' : 'ダウンロード'; resultCard.classList.remove('hidden'); }
+function showSummary(){ const done=items.filter(x=>x.status==='done'); if(!done.length)return; const before=done.reduce((s,x)=>s+x.size,0), after=done.reduce((s,x)=>s+x.outSize,0); const ratio=Math.round((1-after/before)*100); $('sumPct').textContent=(ratio>0?'-':'±')+(ratio>0?ratio:0)+'%'; const allUnder=done.every(x=>x.outSize<=200*1048576); $('sumLbl').innerHTML=done.length+'件完了 · 合計 '+fmtSize(before)+' → '+fmtSize(after)+'<br>'+(allUnder?'すべて200MB以下。NotebookLMにそのまま入れられます':'一部200MBを超えています。品質を下げて再実行してください'); $('dlAllLabel').textContent = done.length>1 ? done.length+'件すべてダウンロード' : 'ダウンロード'; resultCard.classList.remove('hidden'); }
 $('dlAllBtn').addEventListener('click', async ()=>{ const done=items.filter(x=>x.status==='done'); for(const it of done){ const a=document.createElement('a'); a.href=it.outUrl; a.download=it.outName; document.body.appendChild(a); a.click(); a.remove(); await new Promise(r=>setTimeout(r,400)); } });
 render();
 </script>
